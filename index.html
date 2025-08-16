@@ -2,56 +2,73 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <title>Treasure Code Checker</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Treasure Hunt – Code Check</title>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 40px; }
-    label, input, button { font-size: 18px; }
-    #status { margin-top: 12px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; min-height: 24px; }
-    .ok { background: #e7f6ec; border-color: #b7e1c1; }
-    .err { background: #fde8e8; border-color: #f5b5b5; }
-    .warn { background: #fff4e5; border-color: #ffd7a8; }
+    :root { font-family: system-ui, sans-serif; }
+    body { display:grid; place-items:center; min-height:100dvh; margin:0; background:#0f172a; color:#e2e8f0; }
+    .card { width:min(680px, 92vw); background:#111827; border:1px solid #334155; border-radius:16px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+    h1 { margin:0 0 8px; font-size:1.25rem; }
+    p.hint { margin:0 0 16px; color:#94a3b8; }
+    form { display:flex; gap:12px; }
+    input[type="text"]{
+      flex:1; padding:14px 16px; font-size:1.05rem; border-radius:12px; border:1px solid #334155;
+      background:#0b1220; color:#e2e8f0; outline:none;
+    }
+    input::placeholder{ color:#64748b; }
+    button{
+      padding:14px 18px; font-weight:600; border-radius:12px; border:1px solid #334155; background:#1e293b; color:#e2e8f0; cursor:pointer;
+    }
+    button[disabled]{ opacity:.6; cursor:not-allowed; }
+    .out { margin-top:16px; padding:14px; border-radius:12px; background:#0b1220; border:1px solid #334155; min-height:3.25em; }
+    .ok { color:#86efac; }
+    .err { color:#fca5a5; }
+    .muted { color:#94a3b8; }
+    .row { display:flex; gap:8px; align-items:center; margin-top:8px; }
+    .small { font-size:.9rem; }
+    code { background:#0b1220; padding:2px 6px; border-radius:6px; border:1px solid #334155; }
   </style>
 </head>
 <body>
-  <h1>Enter your code</h1>
+  <div class="card">
+    <h1>Enter your code</h1>
 
-  <form id="f" novalidate>
-    <label for="code">Code</label><br>
-    <input id="code" name="code" type="text" inputmode="numeric" maxlength="7" autocomplete="one-time-code" placeholder="digits only" />
-    <button id="go" type="submit">Check</button>
-  </form>
+    <form id="form" autocomplete="off" novalidate>
+      <input id="code" name="code" type="text" inputmode="numeric" pattern="\\d{6,7}"
+             placeholder="e.g. 123456 or 1234567" maxlength="7" required />
+      <button id="btn" type="submit">Check</button>
+    </form>
 
-  <div id="status" aria-live="polite"></div>
+    <div id="out" class="out muted">Give me your seed</div>
+
+
+    </div>
+  </div>
 
   <script>
-    const API_URL = '/api/check';
+    // ⬇️ Point this to your API. If you previously used `/api/check`,
+    // either change it here to '/check' OR update your Flask route to '/api/check'.
+    const API_URL = 'https://treasure-hunt-website.onrender.com/check';
+    // Example if your site & API share the same hostname path prefix:
+    // const API_URL = '/check';
 
+    const form = document.getElementById('form');
+    const codeEl = document.getElementById('code');
+    const btn = document.getElementById('btn');
+    const out = document.getElementById('out');
 
-    const f = document.getElementById('f');
-    const codeInput = document.getElementById('code');
-    const statusBox = document.getElementById('status');
-    const goBtn = document.getElementById('go');
+    function show(msg, cls='muted'){
+      out.className = 'out ' + cls;
+      out.textContent = msg;
+    }
 
-    // Keep only digits, cap at 7
-    codeInput.addEventListener('input', () => {
-      codeInput.value = codeInput.value.replace(/\D/g, '').slice(0, 7);
-    });
+    function isSixOrSevenDigits(s){
+      return /^\d{6,7}$/.test(s);
+    }
 
-    f.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      clearStatus();
-
-      const code = (codeInput.value || '').trim();
-      if (!/^\d{6,7}$/.test(code)) {
-        show('Invalid code format.', 'err');
-        codeInput.focus();
-        return;
-      }
-
-      setLoading(true);
-      show('Checking…', 'warn');
-
+    async function checkCode(code){
+      btn.disabled = true;
+      show('Checking…');
       try {
         const res = await fetch(API_URL, {
           method: 'POST',
@@ -59,54 +76,47 @@
           body: JSON.stringify({ code })
         });
 
-        if (res.status === 429) {
-          show('Too many attempts — wait a minute and try again.', 'warn');
-          return;
-        }
-        if (!res.ok) {
-          const t = await res.text();
-          show('Server error. Try again.', 'err');
-          console.debug('Non-OK:', res.status, t);
+        // 429 (rate-limited) can come back from your server.
+        // It may also reply 200 with ok:false and optional reason.
+        const data = await res.json().catch(() => ({}));
+
+        if (res.status === 429 || data.reason === 'rate_limited') {
+          show('Too many attempts. Try again shortly.', 'err');
           return;
         }
 
-        // Try to parse JSON; if not JSON, show raw text for debugging
-        let data;
-        try {
-          data = await res.clone().json();
-        } catch {
-          const t = await res.text();
-          show(t || 'Unexpected response from server.', 'err');
-          console.debug('Non-JSON body:', t);
-          return;
-        }
-
-        if (data && data.ok) {
-          show(data.message || 'Success!', 'ok');
-          codeInput.value = '';
-        } else if (data && data.reason === 'bad_format') {
-          show('Invalid code format.', 'err');
+        if (data.ok && data.message){
+          show(data.message, 'ok');
+        } else if (data.reason === 'bad_format'){
+          show('That code format is invalid. Enter exactly 6 or 7 digits.', 'err');
         } else {
-          show('Nope, wrong code. Try again!', 'err');
+          show('No match for that code. Try again.', 'err');
         }
-      } catch (err) {
-        show('Network error — check your connection.', 'err');
-        console.error(err);
+      } catch (e) {
+        show('Network error contacting the server.', 'err');
       } finally {
-        setLoading(false);
+        btn.disabled = false;
       }
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const code = codeEl.value.trim();
+      if (!isSixOrSevenDigits(code)){
+        show('Please enter exactly 6 or 7 digits.', 'err');
+        codeEl.focus();
+        return;
+      }
+      checkCode(code);
     });
 
-    function show(msg, cls) {
-      statusBox.className = '';
-      if (cls) statusBox.classList.add(cls);
-      statusBox.textContent = msg;
+    // Auto-check if ?code=123456 is present
+    const params = new URLSearchParams(location.search);
+    const preset = (params.get('code') || '').trim();
+    if (isSixOrSevenDigits(preset)){
+      codeEl.value = preset;
+      checkCode(preset);
     }
-    function clearStatus() { statusBox.className = ''; statusBox.textContent = ''; }
-    function setLoading(on) { goBtn.disabled = on; codeInput.readOnly = on; }
-
-    // focus on load
-    window.addEventListener('DOMContentLoaded', () => codeInput.focus());
   </script>
 </body>
 </html>
