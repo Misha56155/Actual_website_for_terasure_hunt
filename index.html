@@ -152,7 +152,7 @@
         </div>
               </div>
 
-
+      <div id="status" class="status" aria-live="polite">Waiting for your code…</div>
     </form>
   </main>
 
@@ -221,7 +221,7 @@
         } else if (data && data.reason === 'bad_format') {
           showStatus('Invalid code format.', 'error');
         } else {
-          showStatus('Nope, that code is incorrect. Try again!', 'error');
+          showStatus('Wrong.', 'error');
         }
       } catch (err) {
         console.error(err);
