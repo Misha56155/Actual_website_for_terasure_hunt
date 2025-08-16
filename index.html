@@ -205,13 +205,17 @@
           return;
         }
 
-        const contentType = res.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
+        let data;
+        try {
+          data = await res.clone().json();
+        } catch {
           const text = await res.text();
-          showStatus('Unexpected response from server.', 'error');
-          console.debug('Unexpected content-type:', contentType, text);
+          // Show server body to help diagnose (remove after you confirm JSON is fixed)
+          showStatus(text || 'Unexpected response from server.', 'error');
+          console.debug('Non-JSON body:', text);
           return;
         }
+
 
         const data = await res.json();
         if (data && data.ok) {
