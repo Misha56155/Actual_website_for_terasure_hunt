@@ -217,7 +217,7 @@
         }
 
 
-        const data = await res.json();
+        data = await res.json();
         if (data && data.ok) {
           showStatus(data.message || 'Success!', 'success');
           // Optional: clear for next step
