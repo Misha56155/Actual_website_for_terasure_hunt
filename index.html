@@ -88,9 +88,9 @@
         if (data.ok && data.message){
           show(data.message, 'ok');
         } else if (data.reason === 'bad_format'){
-          show('That code format is invalid. Enter exactly 6 or 7 digits.', 'err');
+          show('That code format is invalid.', 'err');
         } else {
-          show('No match for that code. Try again.', 'err');
+          show('Wrong.', 'err');
         }
       } catch (e) {
         show('Network error contacting the server.', 'err');
@@ -103,7 +103,7 @@
       e.preventDefault();
       const code = codeEl.value.trim();
       if (!isSixOrSevenDigits(code)){
-        show('Please enter exactly 6 or 7 digits.', 'err');
+        show('Wrong.', 'err');
         codeEl.focus();
         return;
       }
